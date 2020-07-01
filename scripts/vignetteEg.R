@@ -1,19 +1,25 @@
+## Compare results from current rewrite version with original program using dummy data from sparta
+# sparta = https://github.com/BiologicalRecordsCentre/sparta
+## O.L. Pescott, 01/07/2020
+## v0.0 -- First pass
 library(sparta)
 myFresPath <- 'C:\\Frescalo_3a_windows.exe'
-myTimePeriods <- data.frame(start = c(1800), end = c(2018))
+myTimePeriods <- data.frame(start = c(1800), end = c(2018)) # just one time period
 head(myTimePeriods)
 myFolder = 'C:\\Users\\olipes\\Desktop\\frescaOLP\\outputs\\fresVignette'
+# assumes defaults like phi = 0.74
 unicorn_results <- frescalo(Data = unicorns, 
                             frespath = myFresPath,
-                            Fres_weights = 'LCGB',
+                            Fres_weights = 'LCGB', # British Land Cover Map weights
                             time_periods = myTimePeriods,
                             site_col = 'hectad',
                             sp_col = 'CONCEPT',
                             start_col = 'TO_STARTDATE',
                             end_col = 'Date',
                             sinkdir = myFolder)
-
 head(unicorn_results$stat)
+#save(unicorn_results, file = "outputs/fresVignette/unicornRes.Rdata")
+#load(file = "outputs/fresVignette/unicornRes.Rdata")
 
 ## Compare with alpha from my R version 0.0
 wgts <- read.delim(file = "data/GB_LC_Wts.txt", header = F, sep = "")

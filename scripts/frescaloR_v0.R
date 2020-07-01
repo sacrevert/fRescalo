@@ -2,6 +2,8 @@
 ## O.L. Pescott, 30/06/2020
 ## v0.0 -- First pass
 # Load example data used in https://github.com/BiologicalRecordsCentre/sparta
+#rm(list=ls())
+library(useful)
 load(file = "data/unicorns.rda")
 wgts <- read.delim(file = "data/GB_LC_Wts.txt", header = F, sep = "")
 
@@ -47,6 +49,7 @@ lwf <- apply(lwf, 1:2, function(x) ifelse(x > 0.99999, 0.99999, x))
 lwfL <- apply(lwf, 1:2, function(x) -log(1-x))
 #save(lwf, file = "outputs/lwf.rda") # raw weighted freqs
 #save(lwfL, file = "outputs/lwfL.rda") # neg log transformed weighted freqs
+#load(file = "outputs/lwf.rda")
 
 ##############################################
 ## Translation of fortran subroutine fresca ##
@@ -55,12 +58,14 @@ lwfL <- apply(lwf, 1:2, function(x) -log(1-x))
 krepmx <- 100 # max number of iterations
 phibig <- 0.74 # target phi
 tol <- 0.0003 # tolerance for approximation success
+blmdef <- 0.2703 # default limit for benchmark species
 ## While the absolute deviation of phi from target phi is > tolerance and iteration number <= 100
 # continue with iterative approximation process
 # lwfL[j,i] # species x site rescaled (and transformed) frequency matrix
 alpha <- rep(1, length(uniSites))
 phi <- rep(0, length(uniSites))
-tot <- tot2 <- spnum <- rep(NA, length(uniSites))
+tot <- tot2 <- spnum <- an2 <- rep(NA, length(uniSites))
+lwfRscd <- bench <- matrix(nrow = length(uniSpp), ncol = length(uniSites))
 for (i in 1:length(uniSites)) {
   while (isTRUE(abs(phi[i] - phibig) > tol)) {
     jDat <- jDat2 <- rep(NA, length(uniSpp))
@@ -71,7 +76,7 @@ for (i in 1:length(uniSites)) {
           tot[i] <- sum(jDat2)
           tot2[i] <- sum(jDat2^2)
         }
-      # Values for neighbourhood i
+      # Values for site (& neighbourhood) i
       phi[i] <- tot2[i]/tot[i]
       an2[i] <- tot[i]^2/tot2[i]
       spnum[i] <- tot[i]
@@ -82,11 +87,21 @@ for (i in 1:length(uniSites)) {
       }
     }
   }
+  # Now calculate rescaled (j) species ranks in (i) site neighbourhoods
+  for (j in 1:length(uniSpp)) {
+    ## which number is required here?
+    lwfRscd[j,i] <- lwfL[j,i]/spnum[i]
+    # indicate which species are benchmarks in each neighbourhood
+    bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
+  }
 }
 #save(alpha, file = "outputs/alpha_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
 #save(spnum, file = "outputs/spnum_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
-
-
+#load(file = "outputs/alpha_v0.0.rda")
+#load(file = "outputs/spnum_v0.0.rda")
+options(digits=3)
+topright(lwfRscd)
+topright(bench)
 
 ##############################################
 ## Translation of fortran subroutine tfcalc ##
