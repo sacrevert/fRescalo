@@ -3,19 +3,33 @@
 ## v0.0 -- First pass
 # Load example data used in https://github.com/BiologicalRecordsCentre/sparta
 #rm(list=ls())
-library(useful)
+library(lubridate)
 load(file = "data/unicorns.rda")
 wgts <- read.delim(file = "data/GB_LC_Wts.txt", header = F, sep = "")
-periods <- data.frame(start = c(1980, 1990), end = c(1989, 1999))
+periods <- data.frame(t = c(1,2), start = as.Date(c("1980-01-01", "1990-01-01"), "%Y-%m-%d"), 
+                      end = as.Date(c("1989-12-31", "1999-12-31"), "%Y-%m-%d"))
 head(periods)
 
 ## Do the data contain locations that have no weights defined? Exclude them.
 dat <- unicorns[unicorns$hectad %in% wgts$V1,] # lost 4 Locations
 missingLocs <- unicorns[!(unicorns$hectad %in% wgts$V1),]
 
+# Add time period classification to data
+# data.table::foverlaps probably a lot quicker...
+for (d in 1:nrow(dat)) {
+  dat$period[d] <- if(dat$Date[d] %within% interval(ymd("1980-01-01"),ymd("1989-12-31"))) {
+    1
+  } else if (dat$Date[d] %within% interval(ymd("1990-01-01"),ymd("1999-12-31"))) {
+    2
+  } else {
+    NA
+  }
+}
+
 # useful lists etc.
 uniSpp <- unique(dat$CONCEPT) # unique species list
 sppDF <- data.frame(index = 1:length(uniSpp), species = uniSpp, fLevel = as.numeric(uniSpp))
+datM <- merge(dat, sppDF, by.x = "CONCEPT", by.y = "species")
 uniSites <- unique(dat$hectad) # unique data sites
 siteDF <- data.frame(index = 1:length(uniSites), sites = uniSites)
 siteNWgts <- wgts[wgts$V1 %in% uniSites,] # just keep relevant neighbourhoods
@@ -106,7 +120,7 @@ for (i in 1:length(uniSites)) {
     bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1,1,0) # 1 = benchmark
     benchName[j,i] <- ifelse(bench[j,i] == 1, sppDF[sppDF$index==j,]$species, 0) # species as factor levels
   }
-  # Total sum of benchmark spp at sites
+  # Total sum of benchmark spp at site
   abtot[i] <- sum(bench[,i])
   # List of benchmark species' factor levels at each site
   siteBench[[i]] <- benchName[,i][benchName[,i]!=0] # list of benchmark species (as factor levels) at each site
@@ -129,11 +143,26 @@ for (i in 1:length(uniSites)) {
 # iocc - 1 if species j is found at location i at time t, 0 otherwise
 # smpint - the benchmark-based sampling intensity at location i and time t
 iocc <- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
-sampint <- matrix(data = 1.0E-7, nrow = nrow(periods), ncol = length(uniSites)) # [t,i]
-#sampef(i,iit)=sampef(i,iit)+ibench(i,j)*bwght(j)/abtot(i)
+sampint <- sampintW <- matrix(data = 1.0E-7, nrow = nrow(periods), ncol = length(uniSites)) # [t,i]
+
+## Create the time period specific sampling intensity measures based on benchmarks recorded in site i in time period t
 for (t in 1:nrow(periods)) {
   for (i in 1:length(uniSites)) {
-    sampint[t,i] <- 
+    tiBenchRecs <- datM[which(datM$period == t & datM$hectad == uniSites[i] 
+                          & datM$fLevel %in% siteBench[[i]]),]
+    # Note that this approach does not incorporate the option to downweight particular named benchmark species
+    sampint[t,i] <- nrow(unique(tiBenchRecs[,c("fLevel","hectad")]))/abtot[i]
+    # Now create benchmark/time period weights described in Frescalo README (Note 3, L80)
+    # Possibly typo in fortran code here, and 0.0995 should have been 0.95 as per notes, but leave for comparability
+    sampintW[t,i] <- ifelse(sampint[t,i] < 0.0995, sampint[t,i]*10 + 0.005, 1)
   }
 }
+
+pfac <- rep(NA, length(uniSites))
+## Now calculate time factors
+#for (i in 1:length(uniSites)) {
+#  while (isTRUE(abs()) {
+#    pfac[i] <- smpint(i)*fff(i)
+#  }
+#}
 
