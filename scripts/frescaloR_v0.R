@@ -89,14 +89,16 @@ for (i in 1:length(uniSites)) {
   # Now calculate rescaled (j) species ranks in (i) site neighbourhoods
   # in order to label local benchmark species for time factor calcs
   for (j in 1:length(uniSpp)) {
-    lwfRanked[j,i] <- -jDat2[j,i] + j*1.0E-12 # a way of sorting out ties
+    lwfRanked[j,i] <- -jDat2[j,i] + j*1.0E-12 # a way of sorting out ties amongst zeros
     }
   # Rank across all species within a neighbourhood and then normalise by expected (predicted) species number
   lwfRscd[,i] <- rank(lwfRanked[,i])/spnum[i]
   # Then label all species as benchmarks or not within each neighbourhood
   for (j in 1:length(uniSpp)) {
   # indicate which species are benchmarks in each neighbourhood
-    bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
+  # Either species where scaled rank < blmdef or where rank = 1 even though scaled rank > blmdef (for small samples)
+    #bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
+    bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1,1,0) # 1 = benchmark
     }
 }
 #save(alpha, file = "outputs/alpha_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
