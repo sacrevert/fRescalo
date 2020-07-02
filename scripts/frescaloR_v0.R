@@ -65,18 +65,17 @@ blmdef <- 0.2703 # default limit for benchmark species
 alpha <- rep(1, length(uniSites))
 phi <- rep(0, length(uniSites))
 tot <- tot2 <- spnum <- an2 <- rep(NA, length(uniSites))
-lwfRscd <- bench <- matrix(nrow = length(uniSpp), ncol = length(uniSites))
+jDat <- jDat2 <- lwfRscd <- lwfRanked <- bench <- matrix(nrow = length(uniSpp), ncol = length(uniSites))
 for (i in 1:length(uniSites)) {
   while (isTRUE(abs(phi[i] - phibig) > tol)) {
-    jDat <- jDat2 <- rep(NA, length(uniSpp))
     for (k in 1:krepmx) { # k iterations
       for (j in 1:length(uniSpp)) { # over j species in neighbourhood i
-          jDat[j] <- lwfL[j,i]
-          jDat2[j] <- 1-exp(-jDat[j]*alpha[i])
-          tot[i] <- sum(jDat2)
-          tot2[i] <- sum(jDat2^2)
+          jDat[j,i] <- lwfL[j,i]
+          jDat2[j,i] <- 1-exp(-jDat[j,i]*alpha[i])
         }
       # Values for site (& neighbourhood) i
+      tot[i] <- sum(jDat2[,i])
+      tot2[i] <- sum(jDat2[,i]^2)
       phi[i] <- tot2[i]/tot[i]
       an2[i] <- tot[i]^2/tot2[i]
       spnum[i] <- tot[i]
@@ -88,20 +87,22 @@ for (i in 1:length(uniSites)) {
     }
   }
   # Now calculate rescaled (j) species ranks in (i) site neighbourhoods
+  # in order to label local benchmark species for time factor calcs
   for (j in 1:length(uniSpp)) {
-    ## which number is required here?
-    lwfRscd[j,i] <- lwfL[j,i]/spnum[i]
-    # indicate which species are benchmarks in each neighbourhood
+    lwfRanked[j,i] <- -jDat2[j,i] + j*1.0E-12 # a way of sorting out ties
+    }
+  # Rank across all species within a neighbourhood and then normalise by expected (predicted) species number
+  lwfRscd[,i] <- rank(lwfRanked[,i])/spnum[i]
+  # Then label all species as benchmarks or not within each neighbourhood
+  for (j in 1:length(uniSpp)) {
+  # indicate which species are benchmarks in each neighbourhood
     bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
-  }
+    }
 }
 #save(alpha, file = "outputs/alpha_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
 #save(spnum, file = "outputs/spnum_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
 #load(file = "outputs/alpha_v0.0.rda")
 #load(file = "outputs/spnum_v0.0.rda")
-options(digits=3)
-topright(lwfRscd)
-topright(bench)
 
 ##############################################
 ## Translation of fortran subroutine tfcalc ##
