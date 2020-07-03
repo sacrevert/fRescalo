@@ -18,6 +18,7 @@ unicorn_results <- frescalo(Data = unicorns,
                             end_col = 'Date',
                             sinkdir = myFolder)
 head(unicorn_results$stat)
+head(unicorn_results$trend)
 #save(unicorn_results, file = "outputs/fresVignette/unicornRes.Rdata")
 #load(file = "outputs/fresVignette/unicornRes.Rdata")
 
@@ -37,3 +38,19 @@ plot(alphDF$alphTemp, alphDF$Alpha)
 cor(alphDF$alphTemp, alphDF$Alpha) # 0.99923324
 plot(alphDF$spnum, alphDF$Spnum_out)
 cor(alphDF$spnum, alphDF$Spnum_out) # 0.9991448
+
+
+## Time factor comparison
+library(sparta)
+myFresPath <- 'C:\\Frescalo_3a_windows.exe'
+myTimePeriods2 <- data.frame(start = c(1980, 1990), end = c(1989,1999)) # just one time period
+unicorn_TF <- frescalo(Data = unicorns, 
+                            frespath = myFresPath,
+                            Fres_weights = 'LCGB', # British Land Cover Map weights
+                            time_periods = myTimePeriods2,
+                            site_col = 'hectad',
+                            sp_col = 'CONCEPT',
+                            start_col = 'TO_STARTDATE',
+                            end_col = 'Date',
+                            sinkdir = myFolder)
+head(unicorn_TF$trend)

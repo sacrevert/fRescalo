@@ -4,6 +4,7 @@
 # Load example data used in https://github.com/BiologicalRecordsCentre/sparta
 #rm(list=ls())
 library(lubridate)
+library(useful)
 load(file = "data/unicorns.rda")
 wgts <- read.delim(file = "data/GB_LC_Wts.txt", header = F, sep = "")
 periods <- data.frame(t = c(1,2), start = as.Date(c("1980-01-01", "1990-01-01"), "%Y-%m-%d"), 
@@ -142,27 +143,79 @@ for (i in 1:length(uniSites)) {
 # esttot - Estimated number of occurrences of species j at time t, given fitted model
 # iocc - 1 if species j is found at location i at time t, 0 otherwise
 # smpint - the benchmark-based sampling intensity at location i and time t
-iocc <- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
 sampint <- sampintW <- matrix(data = 1.0E-7, nrow = nrow(periods), ncol = length(uniSites)) # [t,i]
 
-## Create the time period specific sampling intensity measures based on benchmarks recorded in site i in time period t
+## Create the time period-specific sampling intensity measures based on benchmarks recorded in site i in time period t
 for (t in 1:nrow(periods)) {
   for (i in 1:length(uniSites)) {
     tiBenchRecs <- datM[which(datM$period == t & datM$hectad == uniSites[i] 
                           & datM$fLevel %in% siteBench[[i]]),]
-    # Note that this approach does not incorporate the option to downweight particular named benchmark species
+    # Note that this approach does not currently incorporate the option to downweight particular named benchmark species
     sampint[t,i] <- nrow(unique(tiBenchRecs[,c("fLevel","hectad")]))/abtot[i]
     # Now create benchmark/time period weights described in Frescalo README (Note 3, L80)
-    # Possibly typo in fortran code here, and 0.0995 should have been 0.95 as per notes, but leave for comparability
+    # Possibly typo in fortran code here, and 0.0995 should perhaps have been 0.95 as per README, but leave for max comparability with
+    # compiled fortran exe in sparta at the mo
     sampintW[t,i] <- ifelse(sampint[t,i] < 0.0995, sampint[t,i]*10 + 0.005, 1)
   }
 }
 
-pfac <- rep(NA, length(uniSites))
-## Now calculate time factors
-#for (i in 1:length(uniSites)) {
-#  while (isTRUE(abs()) {
-#    pfac[i] <- smpint(i)*fff(i)
-#  }
-#}
+# Species j pres/abs at time t, site i
+iocc <- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
+for (j in 1:length(uniSpp)) {
+  for (i in 1:length(uniSites)) {
+    for (t in 1:nrow(periods)) {
+      iocc[j,i,t] <- ifelse(nrow(datM[which(datM$period == t & datM$hectad == uniSites[i] 
+                                      & datM$index == j),]) >= 1, 1, 0)
+    }
+  }
+}
+
+# Calculate time factors
+estval <- pfac <- plog <- esttot <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
+tf <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
+tf1 <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
+#<- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
+for (j in 1:length(uniSpp)) {
+  for (i in 1:length(uniSites)) {
+    for (t in 1:nrow(periods)) {
+      pfac[t,j] <- sum(lwfRscd[j,] * sampintW[t,]) # summing correct here?
+      #if(j == 1 & i == 4) {print(pfac[t,j])}
+      if(pfac[t,j] > 0.98) {pfac[t,j] <- 0.98}
+      plog[t,j] <- -log(1-pfac[t,j])
+      #print(plog[t,j])
+      #while(isTRUE(abs(sptot[t,j] - esttot[t,j]) > 0.0005)) {
+        for (k in 1:krepmx) { # don't really need iterations here if while loop works
+          #print(k)
+          estval[t,j] <- 1 - exp(-plog[t,j] * tf1[t,j])
+          esttot[t,j] <- sum(sampintW[t,] * estval[t,j]) # summing correct here?
+          sptot[t,j] <- sum(sampintW[t,] * iocc[j,,t]) # summing correct here?
+          tf1[t,j] <- tf1[t,j] * sptot[t,j]/(esttot[t,j]+0.0000001)
+        }
+      #}
+    }
+  }
+}
+
+
+esttotR <- t(esttot)
+esttotR <- data.frame(index = 1:nrow(esttotR), esttot = esttotR)
+names(esttotR)[2:3] <- c("1984.5", "1994.5")
+esttotL <- melt(esttotR, id.vars = "index", measure.vars = c("1984.5", "1994.5"))
+esttotL <- esttotL[order(esttotL$index),]
+test <- merge(esttotL, sppDF, by.x = "index", by.y = "index", all.x = T, all.y = F)
+head(test); names(test)[2] <- "Time"
+test2 <- merge(test, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Species", "Time") , all.x = F, all.y = T)
+plot(test2$value, test2$Xest)
+cor(test2$value, test2$Xest) # 0.9987
+
+tf1 <- t(tf1)
+tf1 <- data.frame(index = 1:nrow(tf1), tf1 = tf1)
+names(tf1)[2:3] <- c("1984.5", "1994.5")
+tf1 <- melt(tf1, id.vars = "index", measure.vars = c("1984.5", "1994.5"))
+tf1 <- tf1[order(tf1$index),]
+test3 <- merge(tf1, sppDF, by.x = "index", by.y = "index", all.x = T, all.y = F)
+head(test3); names(test3)[2] <- "Time"
+test4 <- merge(test3, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Species", "Time") , all.x = F, all.y = T)
+plot(test4$value, test4$TFactor)
+cor(test4$value, test4$TFactor) # 0.676635
 
