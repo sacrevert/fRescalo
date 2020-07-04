@@ -1,4 +1,7 @@
-## Compare results from current rewrite version with original program using dummy data from sparta
+#####################################################################################################
+## Compare results from current rewrite version with original program using dummy data from sparta ##
+####### Alpha (neighbourhood rescaling factor) & predicted hectad species richness comparison #######
+#####################################################################################################
 # sparta = https://github.com/BiologicalRecordsCentre/sparta
 ## O.L. Pescott, 01/07/2020
 ## v0.0 -- First pass
@@ -36,21 +39,8 @@ alphDF$hectad <- unique(dat$hectad)
 alphDF <- merge(alphDF, unicorn_results$stat, by = "hectad", by.y = "Location")
 plot(alphDF$alphTemp, alphDF$Alpha)
 cor(alphDF$alphTemp, alphDF$Alpha) # 0.99923324
+## Compared predicted species richnesses
 plot(alphDF$spnum, alphDF$Spnum_out)
 cor(alphDF$spnum, alphDF$Spnum_out) # 0.9991448
 
-
-## Time factor comparison
-library(sparta)
-myFresPath <- 'C:\\Frescalo_3a_windows.exe'
-myTimePeriods2 <- data.frame(start = c(1980, 1990), end = c(1989,1999)) # just one time period
-unicorn_TF <- frescalo(Data = unicorns, 
-                            frespath = myFresPath,
-                            Fres_weights = 'LCGB', # British Land Cover Map weights
-                            time_periods = myTimePeriods2,
-                            site_col = 'hectad',
-                            sp_col = 'CONCEPT',
-                            start_col = 'TO_STARTDATE',
-                            end_col = 'Date',
-                            sinkdir = myFolder)
-head(unicorn_TF$trend)
+## END

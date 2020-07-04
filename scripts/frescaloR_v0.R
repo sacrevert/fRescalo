@@ -171,31 +171,47 @@ for (j in 1:length(uniSpp)) {
 }
 
 # Calculate time factors
-estval <- pfac <- plog <- esttot <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-tf <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-tf1 <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-#<- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
+diff <- estval <- pfac <- plog <- esttot <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
+tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 for (j in 1:length(uniSpp)) {
   for (i in 1:length(uniSites)) {
     for (t in 1:nrow(periods)) {
-      pfac[t,j] <- sum(lwfRscd[j,] * sampintW[t,]) # summing correct here?
+      pfac[t,j] <- sum(lwf[j,] * sampintW[t,])
       #if(j == 1 & i == 4) {print(pfac[t,j])}
       if(pfac[t,j] > 0.98) {pfac[t,j] <- 0.98}
       plog[t,j] <- -log(1-pfac[t,j])
-      #print(plog[t,j])
-      #while(isTRUE(abs(sptot[t,j] - esttot[t,j]) > 0.0005)) {
+      #while(isTRUE(diff[t,j]) > 0.0005) {
         for (k in 1:krepmx) { # don't really need iterations here if while loop works
-          #print(k)
-          estval[t,j] <- 1 - exp(-plog[t,j] * tf1[t,j])
-          esttot[t,j] <- sum(sampintW[t,] * estval[t,j]) # summing correct here?
-          sptot[t,j] <- sum(sampintW[t,] * iocc[j,,t]) # summing correct here?
-          tf1[t,j] <- tf1[t,j] * sptot[t,j]/(esttot[t,j]+0.0000001)
+          estval[t,j] <- 1 - exp(-plog[t,j] * tf[t,j])
+          esttot[t,j] <- sum(sampintW[t,] * estval[t,j])
+          sptot[t,j] <- sum(sampintW[t,] * iocc[j,,t])
+          tf[t,j] <- tf[t,j] * sptot[t,j]/(esttot[t,j]+0.0000001)
+          #diff[t,j] <- abs(sptot[t,j] - (esttot[t,j]+0.0000001))
         }
       #}
     }
   }
 }
+## END
+# Time factor standard deviations not implemented
 
+########################################
+## Time factor comparison with sparta ##
+########################################
+library(sparta)
+library(reshape2)
+myFresPath <- 'C:\\Frescalo_3a_windows.exe'
+myTimePeriods2 <- data.frame(start = c(1980, 1990), end = c(1989,1999))
+unicorn_TF <- frescalo(Data = unicorns, 
+                       frespath = myFresPath,
+                       Fres_weights = 'LCGB', # British Land Cover Map weights
+                       time_periods = myTimePeriods2,
+                       site_col = 'hectad',
+                       sp_col = 'CONCEPT',
+                       start_col = 'TO_STARTDATE',
+                       end_col = 'Date',
+                       sinkdir = myFolder)
+head(unicorn_TF$trend)
 
 esttotR <- t(esttot)
 esttotR <- data.frame(index = 1:nrow(esttotR), esttot = esttotR)
@@ -208,7 +224,7 @@ test2 <- merge(test, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Sp
 plot(test2$value, test2$Xest)
 cor(test2$value, test2$Xest) # 0.9987
 
-tf1 <- t(tf1)
+tf1 <- t(tf)
 tf1 <- data.frame(index = 1:nrow(tf1), tf1 = tf1)
 names(tf1)[2:3] <- c("1984.5", "1994.5")
 tf1 <- melt(tf1, id.vars = "index", measure.vars = c("1984.5", "1994.5"))
@@ -217,5 +233,5 @@ test3 <- merge(tf1, sppDF, by.x = "index", by.y = "index", all.x = T, all.y = F)
 head(test3); names(test3)[2] <- "Time"
 test4 <- merge(test3, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Species", "Time") , all.x = F, all.y = T)
 plot(test4$value, test4$TFactor)
-cor(test4$value, test4$TFactor) # 0.676635
+cor(test4$value, test4$TFactor) # 0.687
 
