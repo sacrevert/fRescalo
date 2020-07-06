@@ -177,30 +177,32 @@ for (j in 1:length(uniSpp)) {
 }
 
 # Calculate time factors
-plog <- pfac <- estval <- array(dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
+## I think we actually need to remove the zeros otherwise the TFactors are not comparable with the MOH results
+plog <- pfac <- estval <- array(data = 0, dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
 #plog <- pfac <- estval <- diff <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 esttot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf1 <- matrix(data = NA, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-krepTf <- 5
+krepTf <- 4
 for (t in 1:nrow(periods)) {
   for (j in 1:length(uniSpp)) {
     for (i in 1:length(uniSites)) {
       pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] # benchmark-based sampling intensity
+      #print(pfac[j,i,t])
       if(pfac[j,i,t] > 0.98) {pfac[j,i,t] <- 0.98}
       plog[j,i,t] <- -log(1-pfac[j,i,t])
       sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # downweighting of sites with very little sampling
-      #for (k in 1:krepTf) { # have krepmx = 2, then while when k = 2
-       # if ( k == 1) {
+      #for (k in 1:krepTf) {
+      #  if ( k == 1) {
           estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf[t,j])
           esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-          print(esttot[t,j])
+          #print(esttot[t,j])
           tf1[t,j] <- tf[t,j] * (sptot[t,j]/esttot[t,j]+0.0000001)
-        #} else {
-         # estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf1[t,j])
-        #  esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-        #  tf1[t,j] <- tf1[t,j] * (sptot[t,j]/esttot[t,j])
-        #}
+      for (k in 1:krepTf) { # Seems to diverge from MOH answers with additional iterations
+          estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf1[t,j])
+          esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
+          tf1[t,j] <- tf1[t,j] * (sptot[t,j]/esttot[t,j])
+       }
       #}
     }
   }
