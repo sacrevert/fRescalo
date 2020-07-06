@@ -11,28 +11,32 @@ periods <- data.frame(t = c(1,2), start = as.Date(c("1980-01-01", "1990-01-01"),
                       end = as.Date(c("1989-12-31", "1999-12-31"), "%Y-%m-%d"))
 head(periods)
 
-## Do the data contain locations that have no weights defined? Exclude them.
-dat <- unicorns[unicorns$hectad %in% wgts$V1,] # lost 4 Locations
-missingLocs <- unicorns[!(unicorns$hectad %in% wgts$V1),]
-
 # Add time period classification to data
 # data.table::foverlaps probably a lot quicker...
-for (d in 1:nrow(dat)) {
-  dat$period[d] <- if(dat$Date[d] %within% interval(ymd("1980-01-01"),ymd("1989-12-31"))) {
+for (d in 1:nrow(unicorns)) {
+  unicorns$period[d] <- if(unicorns$Date[d] %within% interval(ymd("1980-01-01"),ymd("1989-12-31"))) {
     1
-  } else if (dat$Date[d] %within% interval(ymd("1990-01-01"),ymd("1999-12-31"))) {
+  } else if (unicorns$Date[d] %within% interval(ymd("1990-01-01"),ymd("1999-12-31"))) {
     2
   } else {
     NA
   }
 }
 
+## Only keep relevant time period data
+dat <- unicorns[which(!is.na(unicorns$period)),]
+
+## Do the data contain locations that have no weights defined? Exclude them.
+dat <- dat[dat$hectad %in% wgts$V1,] # lost 1 Location
+dat$datIndex <- 1:nrow(dat)
+
 # useful lists etc.
 uniSpp <- unique(dat$CONCEPT) # unique species list
-sppDF <- data.frame(index = 1:length(uniSpp), species = uniSpp, fLevel = as.numeric(uniSpp))
+sppDF <- data.frame(spIndex = 1:length(uniSpp), species = uniSpp, fLevel = as.numeric(uniSpp))
 datM <- merge(dat, sppDF, by.x = "CONCEPT", by.y = "species")
-uniSites <- unique(dat$hectad) # unique data sites
-siteDF <- data.frame(index = 1:length(uniSites), sites = uniSites)
+datM <- datM[order(datM$datIndex),]
+uniSites <- unique(datM$hectad) # unique data sites
+siteDF <- data.frame(siteIndex = 1:length(uniSites), sites = uniSites)
 siteNWgts <- wgts[wgts$V1 %in% uniSites,] # just keep relevant neighbourhoods
 
 ##########################################
@@ -49,7 +53,7 @@ for (j in 1:length(uniSpp)){ # for each species j
 # sum(siteNWgts[siteNWgts$V1==uniSites[i],]$V3)
    lwf[j,i] <- sum(siteNWgts[siteNWgts$V1==uniSites[i] 
                          & siteNWgts$V2 %in% 
-                           dat[dat$CONCEPT==uniSpp[j],]$hectad,]$V3)/
+                           datM[datM$CONCEPT==uniSpp[j],]$hectad,]$V3)/
                sum(siteNWgts[siteNWgts$V1==uniSites[i],]$V3+1.0E-10) # adding this small amount to avoid zeros is in original fortran code
  }
 }
@@ -91,7 +95,7 @@ for (i in 1:length(uniSites)) {
     for (k in 1:krepmx) { # k iterations
       for (j in 1:length(uniSpp)) { # over j species in neighbourhood i
           jDat[j,i] <- lwfL[j,i]
-          jDat2[j,i] <- 1-exp(-jDat[j,i]*alpha[i])
+          jDat2[j,i] <- 1-exp(-jDat[j,i]*alpha[i]) # jDat2 = rescaled species frequencies
         }
       # Values for site (& neighbourhood) i
       tot[i] <- sum(jDat2[,i])
@@ -119,7 +123,7 @@ for (i in 1:length(uniSites)) {
   # Either species where scaled rank < blmdef or where rank = 1 even though scaled rank > blmdef (for small samples)
     #bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
     bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1,1,0) # 1 = benchmark
-    benchName[j,i] <- ifelse(bench[j,i] == 1, sppDF[sppDF$index==j,]$species, 0) # species as factor levels
+    benchName[j,i] <- ifelse(bench[j,i] == 1, sppDF[sppDF$spIndex==j,]$species, 0) # species as factor levels
   }
   # Total sum of benchmark spp at site
   abtot[i] <- sum(bench[,i])
@@ -165,7 +169,7 @@ for (j in 1:length(uniSpp)) {
   for (i in 1:length(uniSites)) {
     for (t in 1:nrow(periods)) {
       iocc[j,i,t] <- ifelse(nrow(datM[which(datM$period == t & datM$hectad == uniSites[i] 
-                                      & datM$index == j),]) >= 1, 1, 0)
+                                      & datM$spIndex == j),]) >= 1, 1, 0)
     }
   }
 }
@@ -176,7 +180,7 @@ tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 for (j in 1:length(uniSpp)) {
   for (i in 1:length(uniSites)) {
     for (t in 1:nrow(periods)) {
-      pfac[t,j] <- sum(lwf[j,] * sampintW[t,])
+      pfac[t,j] <- sum(jDat2[j,] * sampintW[t,])
       #if(j == 1 & i == 4) {print(pfac[t,j])}
       if(pfac[t,j] > 0.98) {pfac[t,j] <- 0.98}
       plog[t,j] <- -log(1-pfac[t,j])
@@ -196,11 +200,12 @@ for (j in 1:length(uniSpp)) {
 # Time factor standard deviations not implemented
 
 ########################################
-## Time factor comparison with sparta ##
+# Sparta/original Frescalo comparisons #
 ########################################
 library(sparta)
 library(reshape2)
 myFresPath <- 'C:\\Frescalo_3a_windows.exe'
+myFolder = 'C:\\Users\\olipes\\Desktop\\frescaOLP\\outputs\\fresVignette'
 myTimePeriods2 <- data.frame(start = c(1980, 1990), end = c(1989,1999))
 unicorn_TF <- frescalo(Data = unicorns, 
                        frespath = myFresPath,
@@ -213,25 +218,77 @@ unicorn_TF <- frescalo(Data = unicorns,
                        sinkdir = myFolder)
 head(unicorn_TF$trend)
 
-esttotR <- t(esttot)
-esttotR <- data.frame(index = 1:nrow(esttotR), esttot = esttotR)
-names(esttotR)[2:3] <- c("1984.5", "1994.5")
-esttotL <- melt(esttotR, id.vars = "index", measure.vars = c("1984.5", "1994.5"))
-esttotL <- esttotL[order(esttotL$index),]
-test <- merge(esttotL, sppDF, by.x = "index", by.y = "index", all.x = T, all.y = F)
-head(test); names(test)[2] <- "Time"
-test2 <- merge(test, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Species", "Time") , all.x = F, all.y = T)
-plot(test2$value, test2$Xest)
-cor(test2$value, test2$Xest) # 0.9987
+#####################
+## Compare results ##
+#####################
+par(mfrow=c(2,4))
+## Site-based stuff ##
+# Alpha
+head(unicorn_TF$stat)
+topleft(alpha)
+alphaDF <- data.frame(alpha = alpha, Location = siteDF$sites)
+alphaCompare <- merge(unicorn_TF$stat, alphaDF, by = c("Location"))
+head(alphaCompare)
+cor(alphaCompare$alpha, alphaCompare$Alpha) # 0.993
+plot(alphaCompare$alpha, alphaCompare$Alpha, main = "Alpha") # 0.993
 
-tf1 <- t(tf)
-tf1 <- data.frame(index = 1:nrow(tf1), tf1 = tf1)
-names(tf1)[2:3] <- c("1984.5", "1994.5")
-tf1 <- melt(tf1, id.vars = "index", measure.vars = c("1984.5", "1994.5"))
-tf1 <- tf1[order(tf1$index),]
-test3 <- merge(tf1, sppDF, by.x = "index", by.y = "index", all.x = T, all.y = F)
-head(test3); names(test3)[2] <- "Time"
-test4 <- merge(test3, unicorn_TF$trend, by.x = c("species", "Time"), by.y = c("Species", "Time") , all.x = F, all.y = T)
-plot(test4$value, test4$TFactor)
-cor(test4$value, test4$TFactor) # 0.687
+# Estimated species richness
+head(unicorn_TF$stat)
+topleft(spnum)
+spnumDF <- data.frame(spnum = spnum, Location = siteDF$sites)
+spnumCompare <- merge(unicorn_TF$stat, spnumDF, by = c("Location"))
+head(spnumCompare)
+cor(spnumCompare$spnum, spnumCompare$Spnum_out) # 0.998
+plot(spnumCompare$spnum, spnumCompare$Spnum_out, main = "Predicated spp. richness")
 
+## Species x site based stuff ##
+# Local frequency
+head(unicorn_TF$freq)
+topleft(lwf)
+dimnames(lwf)[[1]] <- sppDF$species
+dimnames(lwf)[[2]] <- siteDF$sites
+lwfDF <- melt(lwf); names(lwfDF)[1:2] <- c("Species", "Location")
+lwfCompare <- merge(unicorn_TF$freq, lwfDF, by = c("Species", "Location"))
+head(lwfCompare)
+cor(lwfCompare$value, lwfCompare$Freq) # 0.998
+plot(lwfCompare$value, lwfCompare$Freq, main = "Species' freqs") # 0.998
+
+# Local frequency (log transformation)
+head(unicorn_TF$freq)
+topleft(lwfL)
+dimnames(lwfL)[[1]] <- sppDF$species
+dimnames(lwfL)[[2]] <- siteDF$sites
+lwfLDF <- melt(lwfL); names(lwfLDF)[1:2] <- c("Species", "Location")
+lwfLCompare <- merge(unicorn_TF$freq, lwfLDF, by = c("Species", "Location"))
+head(lwfLCompare)
+cor(lwfLCompare$value, lwfLCompare$Freq) # 0.992
+
+# Rescaled rank
+dimnames(lwfRscd)[[1]] <- sppDF$species
+dimnames(lwfRscd)[[2]] <- siteDF$sites
+lwfRscdDF <- melt(lwfRscd); names(lwfRscdDF)[1:2] <- c("Species", "Location")
+lwfRscdCompare <- merge(unicorn_TF$freq, lwfRscdDF, by = c("Species", "Location"))
+head(lwfRscdCompare)
+cor(lwfRscdCompare$value, lwfCompare$Rank1) # 0.994
+plot(lwfRscdCompare$value, lwfCompare$Rank1, main = "Rescaled ranks") # 0.994
+
+# Rescaled freq
+dimnames(jDat2)[[1]] <- sppDF$species
+dimnames(jDat2)[[2]] <- siteDF$sites
+jDat2DF <- melt(jDat2); names(jDat2DF)[1:2] <- c("Species", "Location")
+jDat2DFCompare <- merge(unicorn_TF$freq, jDat2DF, by = c("Species", "Location"))
+head(jDat2DFCompare)
+cor(jDat2DFCompare$value, jDat2DFCompare$Freq1) # 0.996
+plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled frequencies") # 0.996
+
+## Species x time stuff ##
+# Time factor [t,j]
+dimnames(tf)[[1]] <-  c(1984.5,1994.5)
+dimnames(tf)[[2]] <-  sppDF$species
+tfDF <- melt(tf); names(tfDF)[1:2] <- c("Time", "Species")
+tfDFCompare <- merge(unicorn_TF$trend, tfDF, by = c("Time", "Species"))
+head(tfDFCompare)
+cor(tfDFCompare$value, tfDFCompare$TFactor) # 0.68
+plot(tfDFCompare$value, tfDFCompare$TFactor, main = "Time factors") # 0.68
+
+## END
