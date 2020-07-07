@@ -3,7 +3,6 @@
 ## v0.0 -- First pass
 # Load example data used in https://github.com/BiologicalRecordsCentre/sparta
 #rm(list=ls())
-library(lubridate)
 library(useful)
 load(file = "data/unicorns.rda")
 wgts <- read.delim(file = "data/GB_LC_Wts.txt", header = F, sep = "")
@@ -180,28 +179,28 @@ for (j in 1:length(uniSpp)) {
 ## I think we actually need to remove the zeros otherwise the TFactors are not comparable with the MOH results
 plog <- pfac <- estval <- array(data = 0, dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
 #plog <- pfac <- estval <- diff <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-esttot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
+esttot <- sptot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf1 <- matrix(data = NA, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-krepTf <- 4
+krepTf <- 2
 for (t in 1:nrow(periods)) {
   for (j in 1:length(uniSpp)) {
+    sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # downweighting of sites with very little sampling
     for (i in 1:length(uniSites)) {
       pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] # benchmark-based sampling intensity
       #print(pfac[j,i,t])
       if(pfac[j,i,t] > 0.98) {pfac[j,i,t] <- 0.98}
       plog[j,i,t] <- -log(1-pfac[j,i,t])
-      sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # downweighting of sites with very little sampling
-      #for (k in 1:krepTf) {
+            #for (k in 1:krepTf) {
       #  if ( k == 1) {
           estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf[t,j])
           esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
           #print(esttot[t,j])
-          tf1[t,j] <- tf[t,j] * (sptot[t,j]/esttot[t,j]+0.0000001)
+          tf1[t,j] <- sptot[t,j]/(esttot[t,j]+0.0000001)
       for (k in 1:krepTf) { # Seems to diverge from MOH answers with additional iterations
           estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf1[t,j])
           esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-          tf1[t,j] <- tf1[t,j] * (sptot[t,j]/esttot[t,j])
+          tf1[t,j] <- tf1[t,j] * (sptot[t,j]/(esttot[t,j]+0.0000001))
        }
       #}
     }
@@ -232,6 +231,7 @@ head(unicorn_TF$trend)
 #####################
 ## Compare results ##
 #####################
+par(mfrow=c(1,2))
 par(mfrow=c(2,4))
 ## Site-based stuff ##
 # Alpha
@@ -264,7 +264,7 @@ lwfDF <- melt(lwf); names(lwfDF)[1:2] <- c("Species", "Location")
 lwfCompare <- merge(unicorn_TF$freq, lwfDF, by = c("Species", "Location"))
 head(lwfCompare)
 cor(lwfCompare$value, lwfCompare$Freq) # 0.998
-plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted /nfreqs") # 0.998
+plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted /n freqs") # 0.998
 abline(a = 0, b = 1)
 
 # Local frequency (log transformation)
@@ -295,7 +295,7 @@ jDat2DF <- melt(jDat2); names(jDat2DF)[1:2] <- c("Species", "Location")
 jDat2DFCompare <- merge(unicorn_TF$freq, jDat2DF, by = c("Species", "Location"))
 head(jDat2DFCompare)
 cor(jDat2DFCompare$value, jDat2DFCompare$Freq1) # 0.996
-plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled species' /nweighted frequencies (f_ij)") # 0.996
+plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled species' /n weighted frequencies (f_ij)") # 0.996
 abline(a = 0, b = 1)
 
 ## Species x time stuff ##
@@ -318,7 +318,7 @@ esttotDFCompare <- merge(unicorn_TF$trend, esttotDF, by = c("Time", "Species"))
 head(esttotDFCompare)
 esttotDFCompare <- esttotDFCompare[order(esttotDFCompare$TFactor),]
 cor(esttotDFCompare$value, esttotDFCompare$Xest) # 0.997
-plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total /nacross neighbourhoods /n(Sigma_i P_ijt)") # 
+plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total /n across neighbourhoods /n(Sigma_i P_ijt)") # 
 abline(a = 0, b = 1)
 
 ## END
