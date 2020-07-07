@@ -235,7 +235,7 @@ head(unicorn_TF$trend)
 #####################
 ## Compare results ##
 #####################
-par(mfrow=c(1,2))
+#par(mfrow=c(1,2))
 par(mfrow=c(2,4))
 ## Site-based stuff ##
 # Alpha
