@@ -15,7 +15,6 @@ unicorns$year <- format(unicorns$TO_STARTDATE, "%Y")
 unicorns$year <- as.numeric(unicorns$year)
 
 # Add time period classification to data
-# data.table::foverlaps probably a lot quicker...
 for (d in 1:nrow(unicorns)) {
   unicorns$period[d] <- if(unicorns$year[d] >= 1980 && unicorns$year[d] <= 1989) {
     1
@@ -176,7 +175,6 @@ for (j in 1:length(uniSpp)) {
 }
 
 # Calculate time factors
-## I think we actually need to remove the zeros otherwise the TFactors are not comparable with the MOH results
 plog <- pfac <- estval <- array(data = 0, dim = c(length(uniSpp), length(uniSites), nrow(periods))) # [j,i,t]
 #plog <- pfac <- estval <- diff <- sptot <- matrix(nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 esttot <- sptot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
@@ -231,6 +229,8 @@ unicorn_TF <- frescalo(Data = unicorns,
                        end_col = 'Date',
                        sinkdir = myFolder)
 head(unicorn_TF$trend)
+#save(unicorn_TF, file = "outputs/unicorn_TF.rda")
+#load(file = "outputs/unicorn_TF.rda")
 
 #####################
 ## Compare results ##
@@ -269,17 +269,6 @@ lwfCompare <- merge(unicorn_TF$freq, lwfDF, by = c("Species", "Location"))
 head(lwfCompare)
 cor(lwfCompare$value, lwfCompare$Freq) # 0.998
 plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted \n freqs") # 0.998
-abline(a = 0, b = 1)
-
-# Local frequency (log transformation)
-head(unicorn_TF$freq)
-topleft(lwfL)
-dimnames(lwfL)[[1]] <- sppDF$species
-dimnames(lwfL)[[2]] <- siteDF$sites
-lwfLDF <- melt(lwfL); names(lwfLDF)[1:2] <- c("Species", "Location")
-lwfLCompare <- merge(unicorn_TF$freq, lwfLDF, by = c("Species", "Location"))
-head(lwfLCompare)
-cor(lwfLCompare$value, lwfLCompare$Freq) # 0.992
 abline(a = 0, b = 1)
 
 # Rescaled rank
