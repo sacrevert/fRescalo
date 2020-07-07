@@ -182,27 +182,22 @@ plog <- pfac <- estval <- array(data = 0, dim = c(length(uniSpp), length(uniSite
 esttot <- sptot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf1 <- matrix(data = NA, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-krepTf <- 2
+krepTf <- 25
 for (t in 1:nrow(periods)) {
   for (j in 1:length(uniSpp)) {
     sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # downweighting of sites with very little sampling
     for (i in 1:length(uniSites)) {
       pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] # benchmark-based sampling intensity
-      #print(pfac[j,i,t])
-      if(pfac[j,i,t] > 0.98) {pfac[j,i,t] <- 0.98}
+      if(pfac[j,i,t] > 0.98) {pfac[j,i,t] <- 0.98} # avoid pfac == 1 situation
       plog[j,i,t] <- -log(1-pfac[j,i,t])
-            #for (k in 1:krepTf) {
-      #  if ( k == 1) {
-          estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf[t,j])
-          esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-          #print(esttot[t,j])
-          tf1[t,j] <- sptot[t,j]/(esttot[t,j]+0.0000001)
-      for (k in 1:krepTf) { # Seems to diverge from MOH answers with additional iterations
-          estval[j,i,t] <- 1 - exp(-plog[j,i,t] * tf1[t,j])
-          esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-          tf1[t,j] <- tf1[t,j] * (sptot[t,j]/(esttot[t,j]+0.0000001))
-       }
-      #}
+      estval[j,,t] <- 1 - exp(-plog[j,,t] * tf[t,j])
+      esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
+      tf1[t,j] <- sptot[t,j]/(esttot[t,j]+0.0000001)
+      for (k in 1:krepTf) {
+        estval[j,,t] <- 1 - exp(-plog[j,,t] * tf1[t,j])
+        esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
+        tf1[t,j] <- tf1[t,j] * (sptot[t,j]/(esttot[t,j]+0.0000001))
+      }
     }
   }
 }
@@ -251,7 +246,7 @@ spnumDF <- data.frame(spnum = spnum, Location = siteDF$sites)
 spnumCompare <- merge(unicorn_TF$stat, spnumDF, by = c("Location"))
 head(spnumCompare)
 cor(spnumCompare$spnum, spnumCompare$Spnum_out) # 0.998
-plot(spnumCompare$spnum, spnumCompare$Spnum_out, main = "Predicted /n site richness")
+plot(spnumCompare$spnum, spnumCompare$Spnum_out, main = "Predicted \n site richness")
 abline(a = 0, b = 1)
 
 ## Species x site based stuff ##
@@ -264,7 +259,7 @@ lwfDF <- melt(lwf); names(lwfDF)[1:2] <- c("Species", "Location")
 lwfCompare <- merge(unicorn_TF$freq, lwfDF, by = c("Species", "Location"))
 head(lwfCompare)
 cor(lwfCompare$value, lwfCompare$Freq) # 0.998
-plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted /n freqs") # 0.998
+plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted \n freqs") # 0.998
 abline(a = 0, b = 1)
 
 # Local frequency (log transformation)
@@ -285,7 +280,7 @@ lwfRscdDF <- melt(lwfRscd); names(lwfRscdDF)[1:2] <- c("Species", "Location")
 lwfRscdCompare <- merge(unicorn_TF$freq, lwfRscdDF, by = c("Species", "Location"))
 head(lwfRscdCompare)
 cor(lwfRscdCompare$value, lwfCompare$Rank1) # 0.994
-plot(lwfRscdCompare$value, lwfCompare$Rank1, main = "Rescaled species /nranks (R_ij)") # 0.994
+plot(lwfRscdCompare$value, lwfCompare$Rank1, main = "Rescaled species \nranks (R_ij)") # 0.994
 abline(a = 0, b = 1)
 
 # Rescaled freq
@@ -295,7 +290,7 @@ jDat2DF <- melt(jDat2); names(jDat2DF)[1:2] <- c("Species", "Location")
 jDat2DFCompare <- merge(unicorn_TF$freq, jDat2DF, by = c("Species", "Location"))
 head(jDat2DFCompare)
 cor(jDat2DFCompare$value, jDat2DFCompare$Freq1) # 0.996
-plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled species' /n weighted frequencies (f_ij)") # 0.996
+plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled species' \n weighted frequencies (f_ij)") # 0.996
 abline(a = 0, b = 1)
 
 ## Species x time stuff ##
@@ -318,7 +313,7 @@ esttotDFCompare <- merge(unicorn_TF$trend, esttotDF, by = c("Time", "Species"))
 head(esttotDFCompare)
 esttotDFCompare <- esttotDFCompare[order(esttotDFCompare$TFactor),]
 cor(esttotDFCompare$value, esttotDFCompare$Xest) # 0.997
-plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total /n across neighbourhoods /n(Sigma_i P_ijt)") # 
+plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total \nacross neighbourhoods \n(Sigma_i P_ijt)") # 
 abline(a = 0, b = 1)
 
 ## END
