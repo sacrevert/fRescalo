@@ -182,21 +182,30 @@ plog <- pfac <- estval <- array(data = 0, dim = c(length(uniSpp), length(uniSite
 esttot <- sptot <- matrix(data = 0, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf <- matrix(data = 1, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
 tf1 <- matrix(data = NA, nrow = nrow(periods), ncol = length(uniSpp)) # [t,j]
-krepTf <- 25
+krepTf <- 100
 for (t in 1:nrow(periods)) {
   for (j in 1:length(uniSpp)) {
-    sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # downweighting of sites with very little sampling
+    # Actual per species total across sites in each time period
+    sptot[t,j] <- sum(wgt[t,] * iocc[j,,t]) # (with downweighting of sites with very little sampling)
     for (i in 1:length(uniSites)) {
-      pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] # benchmark-based sampling intensity
+      # adjust rescaled all-time-period weighted freqs by benchmark-based site sampling intensity
+      pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] 
       if(pfac[j,i,t] > 0.98) {pfac[j,i,t] <- 0.98} # avoid pfac == 1 situation
       plog[j,i,t] <- -log(1-pfac[j,i,t])
+      # calculate initial estimated values across sites
       estval[j,,t] <- 1 - exp(-plog[j,,t] * tf[t,j])
+      # sum to get total across sites (with down-weighting of under-sampled neighbourhoods)
       esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
+      # compare with empirical value sptot
       tf1[t,j] <- sptot[t,j]/(esttot[t,j]+0.0000001)
+      # then iterate to find value of time factor that adjusts sptot to esttot
+      # iterate as long as sptot and esttot are divergent within a t/j combination
       for (k in 1:krepTf) {
-        estval[j,,t] <- 1 - exp(-plog[j,,t] * tf1[t,j])
-        esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
-        tf1[t,j] <- tf1[t,j] * (sptot[t,j]/(esttot[t,j]+0.0000001))
+        if(abs(sptot[t,j]-esttot[t,j]) > 0.0005) {
+          estval[j,,t] <- 1 - exp(-plog[j,,t] * tf1[t,j])
+          esttot[t,j] <- sum(wgt[t,] * estval[j,,t])
+          tf1[t,j] <- tf1[t,j] * (sptot[t,j]/(esttot[t,j]+0.0000001))
+        }
       }
     }
   }
