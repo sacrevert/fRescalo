@@ -5,4 +5,6 @@ R rewrite of Hill (2012; DOI:10.1111/j.2041-210X.2011.00146.x) fortran code avai
 
 This code was mainly written to aid understanding of the paper. Note that Dr Jon Yearsley has also provided what looks like a much faster R version of Frescalo here: https://github.com/DrJonYearsley/frescaloR
 
+Also see the useful insights of R.J. Bijlsma (2013), including VBA re-writes of Hill's fortran code, here: https://www.blwg.nl/mossen/onderzoek/rapporten/BLWGRapport15.pdf
+
 
