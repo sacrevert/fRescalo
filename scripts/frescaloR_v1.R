@@ -207,9 +207,9 @@ for (t in 1:nrow(periods)) {
         }
       }
     }
-    estvar[t,j] <- estvar[t,j] + sum(wgt[t,] * wgt[t,] * estval[j,,t] * (1-estval[j,,t]))
-    sptot1[t,j] <- sptot[t,j] + sqrt(estvar[t,j])
-    ## calculate time factor SD
+    estvar[t,j] <- estvar[t,j] + sum(wgt[t,] * wgt[t,] * estval[j,,t] * (1-estval[j,,t])) # sum variance across sites
+    sptot1[t,j] <- sptot[t,j] + sqrt(estvar[t,j]) # sptot1 is sptot + 1 SD
+    ## calculate time factor SD by optimising another TF using sptot1 as target
     for (i in 1:length(uniSites)) {
       # No point redoing this step, use existing objects
       #pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] 
@@ -230,7 +230,7 @@ for (t in 1:nrow(periods)) {
           tfSD[t,j] <- tfSD[t,j] * (sptot1[t,j]/(esttot[t,j]+0.0000001))
         }
       }
-      StDev[t,j] <- tfSD[t,j] - tf1[t,j]
+      StDev[t,j] <- tfSD[t,j] - tf1[t,j] # TF SD is then difference between original TF and new TF optimised for sptot1
     }
   }
 }
