@@ -7,4 +7,5 @@ This code was mainly written to aid understanding of the paper. Note that Dr Jon
 
 Also see the useful insights of R.J. Bijlsma (2013), including VBA re-writes of Hill's fortran code, here: https://www.blwg.nl/mossen/onderzoek/rapporten/BLWGRapport15.pdf
 
-
+## Update March 2024
+Added the calculation of time factor standard deviations in script `frescaloR_v1.R`
