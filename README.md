@@ -1,5 +1,5 @@
 # fRescalo
-FreScaLO (Frequency Scaling using Local Occupancy) was a method invented by Dr Mark O. Hill (of Hill number and other fame) to analyse biological recording data (i.e. species occurrence data) collected with time-varying effort.
+FreScaLO (Frequency Scaling using Local Occupancy) was a method invented by Dr Mark O. Hill (of Hill number, DCA, and other fame) to analyse biological recording data (i.e. species occurrence data) collected with time-varying effort.
 
 R rewrite of Hill (2012; DOI:10.1111/j.2041-210X.2011.00146.x) fortran code available at https://www.brc.ac.uk/biblio/frescalo-computer-program-analyse-your-biological-records
 
