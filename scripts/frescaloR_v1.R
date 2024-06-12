@@ -32,6 +32,10 @@ dat <- unicorns[which(!is.na(unicorns$period)),]
 ## Do the data contain locations that have no weights defined? Exclude them.
 dat <- dat[dat$hectad %in% wgts$V1,] # lost 1 Location
 dat$datIndex <- 1:nrow(dat)
+# For yearlsey comparison (proj 413)
+#s <- dat[,c(3,5,7)]
+#names(s) <- c("location", "species", "time")
+#write.csv(s, file = "data/clusterTestDat.csv")
 
 # useful lists etc.
 uniSpp <- unique(dat$CONCEPT) # unique species list
@@ -57,7 +61,10 @@ for (j in 1:length(uniSpp)){ # for each species j
     lwf[j,i] <- sum(siteNWgts[siteNWgts$V1==uniSites[i] 
                               & siteNWgts$V2 %in% 
                                 datM[datM$CONCEPT==uniSpp[j],]$hectad,]$V3)/
-      sum(siteNWgts[siteNWgts$V1==uniSites[i],]$V3+1.0E-10) # adding this small amount to avoid zeros is in original fortran code
+      #sum(siteNWgts[siteNWgts$V1==uniSites[i],]$V3+1.0E-10) # adding this small amount to avoid zeros is in original fortran code ## wrong
+      #######################################################
+      sum(siteNWgts[siteNWgts$V1==uniSites[i],]$V3)+1.0E-10 # this small amount is actually only added once in Hill -- June 2024 correction
+      #######################################################
   }
 }
 # Ad hoc checks
@@ -75,6 +82,8 @@ lwf <- apply(lwf, 1:2, function(x) ifelse(x > 0.99999, 0.99999, x))
 lwfL <- apply(lwf, 1:2, function(x) -log(1-x))
 #save(lwf, file = "outputs/lwf.rda") # raw weighted freqs
 #save(lwfL, file = "outputs/lwfL.rda") # neg log transformed weighted freqs
+#save(lwf, file = "outputs/lwf_Jun24.rda") # raw weighted freqs -- with correction L65 - Jun 24
+#save(lwfL, file = "outputs/lwfL_Jun24.rda") # neg log transformed weighted freqs -- with correction L65 - Jun 24
 #load(file = "outputs/lwf.rda")
 
 ##############################################
@@ -91,7 +100,7 @@ blmdef <- 0.2703 # default limit for benchmark species
 alpha <- rep(1, length(uniSites))
 phi <- rep(0, length(uniSites))
 tot <- tot2 <- spnum <- an2 <- abtot <- rep(NA, length(uniSites))
-jDat <- jDat2 <- lwfRscd <- lwfRanked <- bench <- benchName <- matrix(nrow = length(uniSpp), ncol = length(uniSites))
+jDat <- jDat2 <- lwfRscd <- lwfRank1 <- lwfRanked <- bench <- benchName <- matrix(nrow = length(uniSpp), ncol = length(uniSites))
 siteBench <- list()
 for (i in 1:length(uniSites)) {
   while (isTRUE(abs(phi[i] - phibig) > tol)) {
@@ -119,13 +128,17 @@ for (i in 1:length(uniSites)) {
     lwfRanked[j,i] <- -jDat2[j,i] + j*1.0E-12 # a way of sorting out ties amongst zeros
   }
   # Rank across all species within a neighbourhood and then normalise by expected (predicted) species number
+  lwfRank1 [,i] <- rank(lwfRanked[,i])
   lwfRscd[,i] <- rank(lwfRanked[,i])/spnum[i]
   # Then label all species as benchmarks or not within each neighbourhood
   for (j in 1:length(uniSpp)) {
     # indicate which species are benchmarks in each neighbourhood
     # Either species where scaled rank < blmdef or where rank = 1 even though scaled rank > blmdef (for small samples)
     #bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef,1,0) # 1 = benchmark
-    bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1,1,0) # 1 = benchmark
+    #bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1,1,0) # 1 = benchmark
+    ####################################################################################
+    bench[j,i] <- ifelse(lwfRscd[j,i] < blmdef | rank(lwfRanked[,i])[j] == 1, 1, 1.0E-7) # Minor change to bring in line with fortran, Jun 24 (no effect on correlations with fortran in this e.g.)
+    ####################################################################################
     benchName[j,i] <- ifelse(bench[j,i] == 1, sppDF[sppDF$spIndex==j,]$species, 0) # species as factor levels
   }
   # Total sum of benchmark spp at site
@@ -136,6 +149,9 @@ for (i in 1:length(uniSites)) {
 #save(alpha, file = "outputs/alpha_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
 #save(spnum, file = "outputs/spnum_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
 #save(bench, file = "outputs/bench_v0.0.rda") # save initial versions for quick comparison in vignetteEg.R
+#save(alpha, file = "outputs/alpha_vJun24.rda") # with L65 June 24 correction
+#save(spnum, file = "outputs/spnum_vJun24.rda") # with L65 June 24 correction
+#save(bench, file = "outputs/bench_vJun24.rda") # with L65 June 24 correction
 #load(file = "outputs/alpha_v0.0.rda")
 #load(file = "outputs/spnum_v0.0.rda")
 #load(file = "outputs/bench_v0.0.rda")
@@ -207,9 +223,9 @@ for (t in 1:nrow(periods)) {
         }
       }
     }
-    estvar[t,j] <- estvar[t,j] + sum(wgt[t,] * wgt[t,] * estval[j,,t] * (1-estval[j,,t])) # sum variance across sites
-    sptot1[t,j] <- sptot[t,j] + sqrt(estvar[t,j]) # sptot1 is sptot + 1 SD
-    ## calculate time factor SD by optimising another TF using sptot1 as target
+    estvar[t,j] <- estvar[t,j] + sum(wgt[t,] * wgt[t,] * estval[j,,t] * (1-estval[j,,t]))
+    sptot1[t,j] <- sptot[t,j] + sqrt(estvar[t,j])
+# Calculate time factor SDs
     for (i in 1:length(uniSites)) {
       # No point redoing this step, use existing objects
       #pfac[j,i,t] <- jDat2[j,i] * sampint[t,i] 
@@ -230,7 +246,7 @@ for (t in 1:nrow(periods)) {
           tfSD[t,j] <- tfSD[t,j] * (sptot1[t,j]/(esttot[t,j]+0.0000001))
         }
       }
-      StDev[t,j] <- tfSD[t,j] - tf1[t,j] # TF SD is then difference between original TF and new TF optimised for sptot1
+      StDev[t,j] <- tfSD[t,j] - tf1[t,j]
     }
   }
 }
@@ -241,18 +257,20 @@ for (t in 1:nrow(periods)) {
 ########################################
 # library(sparta)
 library(reshape2)
-# myFresPath <- 'C:\\analyses\\Frescalo_3a_windows.exe'
+# myFresPath <- 'C:\\analyses\\Frescalo_3a_windows.exe' # old laptop path
+# myFresPath <- 'C:\\Analyses\\Frescalo_3a_windows.exe' # new laptop June 2024
 # myFolder = 'C:\\Users\\olipes\\Desktop\\frescaOLP\\outputs\\fresVignette'
 # myTimePeriods2 <- data.frame(start = c(1980, 1990), end = c(1989,1999))
-# unicorn_TF <- frescalo(Data = unicorns, 
-#                        frespath = myFresPath,
-#                        Fres_weights = 'LCGB', # British Land Cover Map weights
-#                        time_periods = myTimePeriods2,
-#                        site_col = 'hectad',
-#                        sp_col = 'CONCEPT',
-#                        start_col = 'TO_STARTDATE',
-#                        end_col = 'Date',
-#                        sinkdir = myFolder)
+unicorn_TF <- frescalo(Data = unicorns,
+                       frespath = myFresPath,
+                       Fres_weights = 'LCGB', # British Land Cover Map weights
+                       time_periods = myTimePeriods2,
+                       site_col = 'hectad',
+                       sp_col = 'CONCEPT',
+                       start_col = 'TO_STARTDATE',
+                       end_col = 'Date',
+                       #sinkdir = myFolder)
+                       sinkdir = "C:\\Analyses\\test")
 # head(unicorn_TF$trend)
 #save(unicorn_TF, file = "outputs/unicorn_TF.rda")
 load(file = "outputs/unicorn_TF.rda")
@@ -260,31 +278,39 @@ load(file = "outputs/unicorn_TF.rda")
 #####################
 ## Compare results ##
 #####################
+library(useful)
+library(reshape2)
 #par(mfrow=c(1,2))
 par(mfrow=c(2,4))
 ## Site-based stuff ##
 # Alpha
+#par(mfrow=c(1,1))
 head(unicorn_TF$stat)
 topleft(alpha)
 alphaDF <- data.frame(alpha = alpha, Location = siteDF$sites)
 alphaCompare <- merge(unicorn_TF$stat, alphaDF, by = c("Location"))
 head(alphaCompare)
-cor(alphaCompare$alpha, alphaCompare$Alpha) # 0.993
+cor(alphaCompare$alpha, alphaCompare$Alpha) # 0.993 -- original; Jun 24 correction to L65: 0.9998
 plot(alphaCompare$alpha, alphaCompare$Alpha, main = "Alpha") # 0.993
+#plot(alphaCompare$alpha, alphaCompare$Alpha, main = "Alpha", xlim = c(15,30), ylim = c(15,30)) # 0.993
 abline(a = 0, b = 1)
 
 # Estimated species richness
+#par(mfrow=c(1,1))
 head(unicorn_TF$stat)
 topleft(spnum)
 spnumDF <- data.frame(spnum = spnum, Location = siteDF$sites)
 spnumCompare <- merge(unicorn_TF$stat, spnumDF, by = c("Location"))
 head(spnumCompare)
-cor(spnumCompare$spnum, spnumCompare$Spnum_out) # 0.998
+cor(spnumCompare$spnum, spnumCompare$Spnum_out) # 0.998 -- original; Jun 24 correction to L65: 0.9999
 plot(spnumCompare$spnum, spnumCompare$Spnum_out, main = "Predicted \n site richness")
+plot(spnumCompare$spnum, spnumCompare$Spnum_out, main = "Predicted \n site richness", 
+     xlim = c(15,18), ylim = c(15,18))
 abline(a = 0, b = 1)
 
 ## Species x site based stuff ##
 # Local frequency
+#par(mfrow=c(1,1))
 head(unicorn_TF$freq)
 topleft(lwf)
 dimnames(lwf)[[1]] <- sppDF$species
@@ -292,65 +318,97 @@ dimnames(lwf)[[2]] <- siteDF$sites
 lwfDF <- melt(lwf); names(lwfDF)[1:2] <- c("Species", "Location")
 lwfCompare <- merge(unicorn_TF$freq, lwfDF, by = c("Species", "Location"))
 head(lwfCompare)
-cor(lwfCompare$value, lwfCompare$Freq) # 0.998
+cor(lwfCompare$value, lwfCompare$Freq) # 0.998 -- original; Jun 24 correction to L65: 0.9997
 plot(lwfCompare$value, lwfCompare$Freq, main = "Raw species' weighted \n freqs") # 0.998
 abline(a = 0, b = 1)
 
+# Ranks
+#par(mfrow=c(1,1))
+dimnames(lwfRank1)[[1]] <- sppDF$species
+dimnames(lwfRank1)[[2]] <- siteDF$sites
+lwfRank1DF <- melt(lwfRank1); names(lwfRank1DF)[1:2] <- c("Species", "Location")
+lwfRank1Compare <- merge(unicorn_TF$freq, lwfRank1DF, by = c("Species", "Location"))
+head(lwfRank1Compare)
+cor(lwfRank1Compare$value, lwfCompare$Rank) #
+plot(lwfRank1Compare$value, lwfCompare$Rank, main = "Species ranks") # inflated ranks presumablt reflected in rescaled rank below
+abline(a = 0, b = 1)
+# Discrepancies
+lwfRank1Compare$diff <- abs(lwfRank1Compare$Rank - lwfRank1Compare$value)
+lwfRank1Compare[order(lwfRank1Compare$diff, decreasing = T),]
+sum(lwfRank1Compare$diff==0)/nrow(lwfRank1Compare)*100 # 92.8% agreement
+
 # Rescaled rank
+#par(mfrow=c(1,1))
 dimnames(lwfRscd)[[1]] <- sppDF$species
 dimnames(lwfRscd)[[2]] <- siteDF$sites
 lwfRscdDF <- melt(lwfRscd); names(lwfRscdDF)[1:2] <- c("Species", "Location")
 lwfRscdCompare <- merge(unicorn_TF$freq, lwfRscdDF, by = c("Species", "Location"))
 head(lwfRscdCompare)
-cor(lwfRscdCompare$value, lwfCompare$Rank1) # 0.994
+cor(lwfRscdCompare$value, lwfCompare$Rank1) # 0.994 -- original; Jun 24 correction to L65: 0.9987
 plot(lwfRscdCompare$value, lwfCompare$Rank1, main = "Rescaled species \nranks (R_ij)") # 0.994
 abline(a = 0, b = 1)
+# Discrepancies
+lwfRscdCompare$diff <- abs(lwfRscdCompare$Rank1 - lwfRscdCompare$value)
+lwfRscdCompare[order(lwfRscdCompare$diff, decreasing = T),]
 
 # Rescaled freq
+#par(mfrow=c(1,1))
 dimnames(jDat2)[[1]] <- sppDF$species
 dimnames(jDat2)[[2]] <- siteDF$sites
 jDat2DF <- melt(jDat2); names(jDat2DF)[1:2] <- c("Species", "Location")
 jDat2DFCompare <- merge(unicorn_TF$freq, jDat2DF, by = c("Species", "Location"))
 head(jDat2DFCompare)
-cor(jDat2DFCompare$value, jDat2DFCompare$Freq1) # 0.996
+cor(jDat2DFCompare$value, jDat2DFCompare$Freq1) # 0.996 -- original; Jun 24 correction to L65: 0.9994
 plot(jDat2DFCompare$value, jDat2DFCompare$Freq1, main = "Rescaled species' \n weighted frequencies (f_ij)") # 0.996
 abline(a = 0, b = 1)
 
 ## Species x time stuff ##
 # Time factor [t,j]
+#par(mfrow=c(1,1))
 dimnames(tf1)[[1]] <-  c(1984.5,1994.5)
 dimnames(tf1)[[2]] <-  sppDF$species
 tf1DF <- melt(tf1); names(tf1DF)[1:2] <- c("Time", "Species")
 tf1DFCompare <- merge(unicorn_TF$trend, tf1DF, by = c("Time", "Species"))
 head(tf1DFCompare)
 tf1DFCompare <- tf1DFCompare[order(tf1DFCompare$TFactor),]
-cor(tf1DFCompare$value, tf1DFCompare$TFactor) # 0.974
+cor(tf1DFCompare$value, tf1DFCompare$TFactor) # 0.974 -- original; June 24, L65 correction: 0.9984
 plot(tf1DFCompare$value, tf1DFCompare$TFactor, main = "Time factors") # 
 abline(a = 0, b = 1)
+# Discrepancies
+tf1DFCompare$diff <- tf1DFCompare$TFactor - tf1DFCompare$value
+head(tf1DFCompare[order(abs(tf1DFCompare$diff), decreasing = T),])
 
 # Estimated species total (across sites) after rescaling
+#par(mfrow=c(1,1))
 dimnames(esttot)[[1]] <-  c(1984.5,1994.5)
 dimnames(esttot)[[2]] <-  sppDF$species
 esttotDF <- melt(esttot); names(esttotDF)[1:2] <- c("Time", "Species")
 esttotDFCompare <- merge(unicorn_TF$trend, esttotDF, by = c("Time", "Species"))
 head(esttotDFCompare)
 esttotDFCompare <- esttotDFCompare[order(esttotDFCompare$TFactor),]
-cor(esttotDFCompare$value, esttotDFCompare$Xest) # 0.997
+cor(esttotDFCompare$value, esttotDFCompare$Xest) # 0.997 -- orig; Jun 24, L65 correction: 0.9995
 plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total \nacross neighbourhoods \n(Sigma_i P_ijt)") # 
+abline(a = 0, b = 1)
+plot(esttotDFCompare$value, esttotDFCompare$Xest, main = "Est. per species total \nacross neighbourhoods \n(Sigma_i P_ijt)",
+     xlim = c(0,50), ylim = c(0,50)) # 
 abline(a = 0, b = 1)
 
 ### Added for v1
 # Time factor SDs [t,j]
-par(mfrow=c(1,1))
+#par(mfrow=c(1,1))
 dimnames(StDev)[[1]] <-  c(1984.5,1994.5)
 dimnames(StDev)[[2]] <-  sppDF$species
 StDevDF <- melt(StDev); names(StDevDF)[1:2] <- c("Time", "Species")
 StDevDFCompare <- merge(unicorn_TF$trend, StDevDF, by = c("Time", "Species"))
 head(StDevDFCompare)
 StDevDFCompare <- StDevDFCompare[order(StDevDFCompare$TFactor),]
-cor(StDevDFCompare$value, StDevDFCompare$StDev) # 0.999
+cor(StDevDFCompare$value, StDevDFCompare$StDev) # 0.999 -- orig; Jun 24, L65 correction: 0.9990576
 plot(StDevDFCompare$value, StDevDFCompare$StDev, main = "Time factor SDs") # 
 abline(a = 0, b = 1)
-
+# Look at SD for spp with biggest TF discrepancy
+StDevDFCompare[StDevDFCompare$Species == "Species 18" & StDevDFCompare$Time == 1984.5,]
+# General discrepancies
+StDevDFCompare$diff <- StDevDFCompare$StDev - StDevDFCompare$value
+head(StDevDFCompare[order(abs(StDevDFCompare$diff), decreasing = T),])
 
 ## END
