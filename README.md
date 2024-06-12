@@ -9,3 +9,6 @@ Also see the useful insights of R.J. Bijlsma (2013), including VBA re-writes of 
 
 ## Update March 2024
 Added the calculation of time factor standard deviations in script `frescaloR_v1.R`
+
+## Update June 2024
+Minor change L66 script `frescaloR_v1.R` in line with Hill fortran code marginally increased correlation with that program's outputs (although it was already always more than 0.99 for any given output)
