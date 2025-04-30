@@ -1,0 +1,11 @@
+cff-version: 1.0.0
+message: "If you reference this code, please cite it as below."
+authors:
+- family-names: "Pescott"
+  given-names: "O.L."
+  orcid: "https://orcid.org/0000-0002-0685-8046"
+title: "An R translation of Hill's fortran code for Frescalo"
+version: "1.0.0"
+doi: 10.5281/zenodo.15305437
+date-released: 2025-04-30
+url: "https://github.com/sacrevert/fRescalo"
